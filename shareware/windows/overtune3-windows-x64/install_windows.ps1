@@ -71,6 +71,17 @@ $DestExe = Join-Path $InstallDir $ExeName
 Write-Host "  -> Copying application binaries and Qt runtime dependencies..." -ForegroundColor Green
 Copy-Item -Path "$SourceDir\*" -Destination $InstallDir -Recurse -Force
 
+# Ensure MSVC C++ runtime DLLs are present in the target installation directory for zero-dependency execution
+$RequiredCrt = @("msvcp140.dll", "msvcp140_1.dll", "msvcp140_2.dll", "vcruntime140.dll", "vcruntime140_1.dll")
+$missingCrt = $RequiredCrt | Where-Object { -not (Test-Path (Join-Path $InstallDir $_)) }
+if ($missingCrt) {
+    Write-Host "  -> Bundling MSVC CRT libraries for zero-dependency operation..." -ForegroundColor Cyan
+    $crtSource = (Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1).FullName
+    if ($crtSource) {
+        Copy-Item "$crtSource\*.dll" -Destination $InstallDir -Force
+    }
+}
+
 # Create FilterDesigner.exe copy if not already present
 $AltDestExe = Join-Path $InstallDir "FilterDesigner.exe"
 if (!(Test-Path $AltDestExe) -and (Test-Path $DestExe)) {
@@ -171,7 +182,7 @@ if (!(Test-Path $UninstallKey)) {
 
 Set-ItemProperty -Path $UninstallKey -Name "DisplayName" -Value "Overtune 3.2 Studio"
 Set-ItemProperty -Path $UninstallKey -Name "DisplayVersion" -Value $Version
-Set-ItemProperty -Path $UninstallKey -Name "Publisher" -Value "Overtune DSP"
+Set-ItemProperty -Path $UninstallKey -Name "Publisher" -Value "Shadcy"
 Set-ItemProperty -Path $UninstallKey -Name "InstallLocation" -Value $InstallDir
 Set-ItemProperty -Path $UninstallKey -Name "DisplayIcon" -Value $IconRef
 Set-ItemProperty -Path $UninstallKey -Name "UninstallString" -Value "powershell.exe -ExecutionPolicy Bypass -File `"$InstallDir\uninstall.ps1`""

@@ -43,6 +43,10 @@ echo [1/4] Copying binary and deployed Qt runtime...
 xcopy /s /e /y /q "%BIN_SRC%\*" "%STAGE_DIR%\bin\" >nul
 if exist "%STAGE_DIR%\bin\dsp_tests.exe" del /q "%STAGE_DIR%\bin\dsp_tests.exe"
 
+rem Guarantee MSVC CRT Redistributable DLLs are bundled for zero-dependency execution
+echo Deploying MSVC C++ runtime dependencies...
+powershell -NoProfile -Command "$crt = (Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1).FullName; if ($crt) { Copy-Item \"$crt\*.dll\" -Destination '%STAGE_DIR%\bin' -Force; Write-Host '  -> Bundled MSVC CRT runtime DLLs successfully.' -ForegroundColor Green } else { Write-Warning 'Could not locate MSVC CRT Redist folder' }"
+
 if not exist "%STAGE_DIR%\bin\FilterDesigner.exe" (
     copy /y "%STAGE_DIR%\bin\ot3.exe" "%STAGE_DIR%\bin\FilterDesigner.exe" >nul
 )

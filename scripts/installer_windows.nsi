@@ -1,7 +1,9 @@
 !include "MUI2.nsh"
 
 !define APP_VERSION "3.2.5"
-!if /FileExists "..\build\windows-release\bin\ot3.exe"
+!if /FileExists "..\dist\overtune3-windows-x64\bin\ot3.exe"
+  !define APP_BIN "..\dist\overtune3-windows-x64\bin"
+!elseif /FileExists "..\build\windows-release\bin\ot3.exe"
   !define APP_BIN "..\build\windows-release\bin"
 !elseif /FileExists "..\build\bin\Release\ot3.exe"
   !define APP_BIN "..\build\bin\Release"

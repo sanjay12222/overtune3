@@ -16,8 +16,12 @@ echo [2/3] Compiling Release build...
 "%CMAKE_PATH%" --build "%~dp0build" --config Release --parallel
 if errorlevel 1 exit /b %errorlevel%
 
-echo [3/3] Deploying Qt runtime libraries...
-"%QT_PATH%\bin\windeployqt.exe" "%~dp0build\bin\Release\ot3.exe" --qmldir "%~dp0app\qml" --multimedia
+echo [3/3] Deploying Qt runtime and MSVC CRT libraries (zero external dependency)...
+"%QT_PATH%\bin\windeployqt.exe" "%~dp0build\bin\Release\ot3.exe" --qmldir "%~dp0app\qml" --multimedia --compiler-runtime
+
+rem Deploy MSVC CRT runtime libraries app-locally (msvcp140.dll, msvcp140_2.dll, vcruntime140.dll, etc.)
+powershell -NoProfile -Command "$crt = (Get-ChildItem 'C:\Program Files*\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\Microsoft.VC*.CRT' -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1).FullName; if ($crt) { Copy-Item \"$crt\*.dll\" -Destination '%~dp0build\bin\Release' -Force; Write-Host \"[OK] Bundled MSVC CRT runtime from $crt\" -ForegroundColor Green }"
+
 copy /y "%~dp0build\bin\Release\ot3.exe" "%~dp0build\bin\Release\FilterDesigner.exe" >nul
 copy /y "%~dp0assets\logo.ico" "%~dp0build\bin\Release\logo.ico" >nul
 copy /y "%~dp0assets\logo.png" "%~dp0build\bin\Release\logo.png" >nul
