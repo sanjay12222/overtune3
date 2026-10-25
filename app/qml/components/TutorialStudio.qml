@@ -126,7 +126,7 @@ Rectangle {
 
     function buildTutorialJson() {
         const topNames = ["Lowpass (LPF)", "Highpass (HPF)", "Bandpass (BPF)", "Bandstop (Notch)"]
-        const respNames = ["Butterworth", "Chebyshev I", "Chebyshev II", "Elliptic", "Bessel"]
+        const respNames = ["Butterworth", "Chebyshev I", "Chebyshev II", "Elliptic", "Bessel", "FIR"]
         const obj = {
             overtune_version: "3.2",
             type: "overtune_interactive_tutorial",

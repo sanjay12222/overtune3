@@ -19,6 +19,18 @@ std::string FilterSpec::responseName() const noexcept {
         case FilterResponse::ChebyshevII:  return "Chebyshev II";
         case FilterResponse::Elliptic:     return "Elliptic";
         case FilterResponse::Bessel:       return "Bessel";
+        case FilterResponse::FIR:          return "FIR";
+    }
+    return "Unknown";
+}
+
+std::string FilterSpec::windowName() const noexcept {
+    switch (firWindow) {
+        case FirWindow::Rectangular: return "Rectangular";
+        case FirWindow::Hann:        return "Hann";
+        case FirWindow::Hamming:     return "Hamming";
+        case FirWindow::Blackman:    return "Blackman";
+        case FirWindow::Kaiser:      return "Kaiser";
     }
     return "Unknown";
 }

@@ -16,7 +16,16 @@ enum class FilterResponse {
     ChebyshevI,
     ChebyshevII,
     Elliptic,
-    Bessel
+    Bessel,
+    FIR          // Linear-phase windowed-sinc FIR
+};
+
+enum class FirWindow {
+    Rectangular,
+    Hann,
+    Hamming,
+    Blackman,
+    Kaiser       // beta derived from stopbandDb
 };
 
 struct FilterSpec {
@@ -27,10 +36,13 @@ struct FilterSpec {
     double         cutoffFreq = 1000.0;    // Hz  (LPF / HPF)
     double         cutoffFreq2 = 2000.0;   // Hz  (BPF / BSF upper)
     double         rippleDb  = 1.0;        // Chebyshev / Elliptic passband ripple
-    double         stopbandDb = 60.0;      // Elliptic stopband attenuation
+    double         stopbandDb = 60.0;      // Elliptic stopband attenuation / Kaiser FIR target
+    FirWindow      firWindow = FirWindow::Hamming; // FIR window function
 
     [[nodiscard]] std::string typeName()     const noexcept;
     [[nodiscard]] std::string responseName() const noexcept;
+    [[nodiscard]] std::string windowName()   const noexcept;
+    [[nodiscard]] bool        isFir()        const noexcept { return response == FilterResponse::FIR; }
 };
 
 } // namespace dsp

@@ -28,6 +28,7 @@ class FilterEngine : public QObject {
   Q_PROPERTY(double rippleDb READ rippleDb WRITE setRippleDb NOTIFY specChanged)
   Q_PROPERTY(
       double stopbandDb READ stopbandDb WRITE setStopbandDb NOTIFY specChanged)
+  Q_PROPERTY(int firWindow READ firWindow WRITE setFirWindow NOTIFY specChanged)
 
   // ── Analysis result properties ──────────────────────────────────────────
   Q_PROPERTY(
@@ -44,6 +45,9 @@ class FilterEngine : public QObject {
   Q_PROPERTY(double stabilityMargin READ stabilityMargin NOTIFY resultsChanged)
   Q_PROPERTY(QVariantMap stepMetrics READ stepMetrics NOTIFY resultsChanged)
   Q_PROPERTY(bool hasResults READ hasResults NOTIFY resultsChanged)
+  Q_PROPERTY(bool isFir READ isFir NOTIFY resultsChanged)
+  Q_PROPERTY(int sectionCount READ sectionCount NOTIFY resultsChanged)
+  Q_PROPERTY(int tapCount READ tapCount NOTIFY resultsChanged)
 
 public:
   explicit FilterEngine(QObject *parent = nullptr);
@@ -57,6 +61,7 @@ public:
   double cutoffFreq2() const { return m_spec.cutoffFreq2; }
   double rippleDb() const { return m_spec.rippleDb; }
   double stopbandDb() const { return m_spec.stopbandDb; }
+  int firWindow() const { return static_cast<int>(m_spec.firWindow); }
 
   QVariantList magnitudeData() const { return m_magnitudeData; }
   QVariantList phaseData() const { return m_phaseData; }
@@ -70,6 +75,9 @@ public:
   double stabilityMargin() const { return m_stabilityMargin; }
   QVariantMap stepMetrics() const { return m_stepMetrics; }
   bool hasResults() const { return m_hasResults; }
+  bool isFir() const { return m_coeff.isFir(); }
+  int sectionCount() const { return static_cast<int>(m_coeff.sos.size()); }
+  int tapCount() const { return static_cast<int>(m_coeff.fir.size()); }
   const dsp::FilterCoefficients& coefficients() const { return m_coeff; }
 
   // Property setters
@@ -81,6 +89,7 @@ public:
   void setCutoffFreq2(double v);
   void setRippleDb(double v);
   void setStopbandDb(double v);
+  void setFirWindow(int v);
 
   // QML-invokable methods
   Q_INVOKABLE void design();
@@ -88,6 +97,7 @@ public:
   Q_INVOKABLE QString exportCode(int format); // 0=C, 1=C++, 2=Python, 3=JSON
   Q_INVOKABLE QString filterTypeName() const;
   Q_INVOKABLE QString filterResponseName() const;
+  Q_INVOKABLE QString firWindowName() const;
 
   // Reset filter parameters to defaults
   Q_INVOKABLE void reset();

@@ -4,6 +4,8 @@
 #include <numbers>
 #include <algorithm>
 #include <stdexcept>
+#include <tuple>
+#include <utility>
 
 namespace dsp {
 
@@ -23,6 +25,68 @@ static double biquadProcess(const FilterCoefficients& c,
         y = out;
     }
     return y;
+}
+
+// Evaluate H(z) slightly inside the unit circle (|z| = 1 - 1e-4) so the phase of
+// transmission nulls is taken off the branch-cut singularity
+static Complex evaluateRegularized(const FilterCoefficients& coeff, double omega) {
+    const Complex zReg = std::polar(1.0 - 1e-4, omega);
+    if (coeff.isFir()) {
+        Complex acc{};
+        Complex zPow{1.0, 0.0};
+        for (double h : coeff.fir) {
+            acc += h * zPow;
+            zPow /= zReg;
+        }
+        return coeff.gain * acc;
+    }
+    Complex HReg{coeff.gain};
+    for (const auto& s : coeff.sos) {
+        const Complex numReg = s.b0 + s.b1 / zReg + s.b2 / (zReg * zReg);
+        const Complex denReg = 1.0  + s.a1 / zReg + s.a2 / (zReg * zReg);
+        if (std::abs(denReg) > 1e-300) {
+            HReg *= numReg / denReg;
+        }
+    }
+    return HReg;
+}
+
+// FIR group delay: tau(w) = Re{ sum n h[n] z^-n / sum h[n] z^-n }
+static double firGroupDelay(const FilterCoefficients& coeff, double omega) {
+    auto ratioAt = [&](double radius) {
+        const Complex zInv = 1.0 / std::polar(radius, omega);
+        Complex num{}, numDeriv{};
+        Complex zPow{1.0, 0.0};
+        for (size_t n = 0; n < coeff.fir.size(); ++n) {
+            num += coeff.fir[n] * zPow;
+            numDeriv += static_cast<double>(n) * coeff.fir[n] * zPow;
+            zPow *= zInv;
+        }
+        return std::make_pair(num, numDeriv);
+    };
+    auto [num, numDeriv] = ratioAt(1.0);
+    if (std::abs(num) <= 1e-10) std::tie(num, numDeriv) = ratioAt(1.0 - 1e-4);
+    if (std::abs(num) <= 1e-300) return 0.0;
+    return (numDeriv / num).real();
+}
+
+static double sosGroupDelay(const FilterCoefficients& coeff, const Complex& zInv, const Complex& zInv2) {
+    double totalGd = 0.0;
+    for (const auto& s : coeff.sos) {
+        Complex num = s.b0 + s.b1 * zInv + s.b2 * zInv2;
+        Complex den = 1.0  + s.a1 * zInv + s.a2 * zInv2;
+
+        if (std::abs(num) > 1e-14) {
+            const Complex numDeriv = (s.b1 * zInv + 2.0 * s.b2 * zInv2) / num;
+            totalGd += numDeriv.real();
+        }
+
+        if (std::abs(den) > 1e-14) {
+            const Complex denDeriv = (s.a1 * zInv + 2.0 * s.a2 * zInv2) / den;
+            totalGd -= denDeriv.real();
+        }
+    }
+    return totalGd;
 }
 
 AnalysisResult FilterAnalysis::compute(const FilterCoefficients& coeff,
@@ -183,16 +247,7 @@ AnalysisResult FilterAnalysis::compute(const FilterCoefficients& coeff,
         if (mag > 1e-14) {
             rawPhase = std::arg(H);
         } else {
-            const Complex zReg = std::polar(1.0 - 1e-4, omega);
-            Complex HReg{coeff.gain};
-            for (const auto& s : coeff.sos) {
-                const Complex numReg = s.b0 + s.b1 / zReg + s.b2 / (zReg * zReg);
-                const Complex denReg = 1.0  + s.a1 / zReg + s.a2 / (zReg * zReg);
-                if (std::abs(denReg) > 1e-300) {
-                    HReg *= numReg / denReg;
-                }
-            }
-            rawPhase = std::arg(HReg);
+            rawPhase = std::arg(evaluateRegularized(coeff, omega));
         }
 
         if (!hasPrevPhase) {
@@ -210,21 +265,8 @@ AnalysisResult FilterAnalysis::compute(const FilterCoefficients& coeff,
         // Exact analytical group delay: \tau_g(\omega) = \sum \tau_{g,k}(\omega)
         // Edge cases: zeros or poles on or very close to unit circle cause division by zero.
         // We apply Poisson regularization (evaluating with r = 1 - 1e-4) when denominator < 1e-4.
-        double totalGd = 0.0;
-        for (const auto& s : coeff.sos) {
-            Complex num = s.b0 + s.b1 * zInv + s.b2 * zInv2;
-            Complex den = 1.0  + s.a1 * zInv + s.a2 * zInv2;
-
-            if (std::abs(num) > 1e-14) {
-                const Complex numDeriv = (s.b1 * zInv + 2.0 * s.b2 * zInv2) / num;
-                totalGd += numDeriv.real();
-            }
-
-            if (std::abs(den) > 1e-14) {
-                const Complex denDeriv = (s.a1 * zInv + 2.0 * s.a2 * zInv2) / den;
-                totalGd -= denDeriv.real();
-            }
-        }
+        double totalGd = coeff.isFir() ? firGroupDelay(coeff, omega)
+                                       : sosGroupDelay(coeff, zInv, zInv2);
 
         if (!std::isfinite(totalGd))
             totalGd = 0.0;
@@ -265,33 +307,11 @@ AnalysisPoint FilterAnalysis::evaluatePoint(const FilterCoefficients& coeff,
     if (mag > 1e-14) {
         phaseDeg = std::arg(H) * 180.0 / PI;
     } else {
-        const Complex zReg = std::polar(1.0 - 1e-4, omega);
-        Complex HReg{coeff.gain};
-        for (const auto& s : coeff.sos) {
-            const Complex numReg = s.b0 + s.b1 / zReg + s.b2 / (zReg * zReg);
-            const Complex denReg = 1.0  + s.a1 / zReg + s.a2 / (zReg * zReg);
-            if (std::abs(denReg) > 1e-300) {
-                HReg *= numReg / denReg;
-            }
-        }
-        phaseDeg = std::arg(HReg) * 180.0 / PI;
+        phaseDeg = std::arg(evaluateRegularized(coeff, omega)) * 180.0 / PI;
     }
 
-    double totalGd = 0.0;
-    for (const auto& s : coeff.sos) {
-        Complex num = s.b0 + s.b1 * zInv + s.b2 * zInv2;
-        Complex den = 1.0  + s.a1 * zInv + s.a2 * zInv2;
-
-        if (std::abs(num) > 1e-14) {
-            const Complex numDeriv = (s.b1 * zInv + 2.0 * s.b2 * zInv2) / num;
-            totalGd += numDeriv.real();
-        }
-
-        if (std::abs(den) > 1e-14) {
-            const Complex denDeriv = (s.a1 * zInv + 2.0 * s.a2 * zInv2) / den;
-            totalGd -= denDeriv.real();
-        }
-    }
+    double totalGd = coeff.isFir() ? firGroupDelay(coeff, omega)
+                                   : sosGroupDelay(coeff, zInv, zInv2);
 
     if (std::isnan(totalGd) || std::isinf(totalGd)) {
         totalGd = 0.0;
@@ -304,6 +324,12 @@ AnalysisPoint FilterAnalysis::evaluatePoint(const FilterCoefficients& coeff,
 
 std::vector<double> FilterAnalysis::impulseResponse(const FilterCoefficients& coeff, int length) {
     if (length < 32) length = 32;
+    if (coeff.isFir()) {
+        std::vector<double> out(length, 0.0);
+        for (size_t n = 0; n < coeff.fir.size() && n < out.size(); ++n)
+            out[n] = coeff.gain * coeff.fir[n];
+        return out;
+    }
     std::vector<std::array<double,2>> state(coeff.sos.size(), {0.0, 0.0});
     std::vector<double> out(length);
     for (int i = 0; i < length; ++i) {
@@ -316,6 +342,15 @@ std::vector<double> FilterAnalysis::impulseResponse(const FilterCoefficients& co
 
 std::vector<double> FilterAnalysis::stepResponse(const FilterCoefficients& coeff, int length) {
     if (length < 32) length = 32;
+    if (coeff.isFir()) {
+        std::vector<double> out(length, 0.0);
+        double acc = 0.0;
+        for (size_t n = 0; n < out.size(); ++n) {
+            if (n < coeff.fir.size()) acc += coeff.gain * coeff.fir[n];
+            out[n] = acc;
+        }
+        return out;
+    }
     std::vector<std::array<double,2>> state(coeff.sos.size(), {0.0, 0.0});
     std::vector<double> out(length);
     for (int i = 0; i < length; ++i) {
@@ -326,9 +361,175 @@ std::vector<double> FilterAnalysis::stepResponse(const FilterCoefficients& coeff
     return out;
 }
 
+// FIR designs are always stable (all poles at z = 0), so verification checks
+// linear-phase symmetry, Parseval energy, the tap-domain reference model and
+// the -6 dB windowed-sinc band edges instead of the SOS/ZPK cross-checks.
+static VerificationResult verifyFir(const FilterSpec& spec,
+                                    const FilterCoefficients& coeff,
+                                    const AnalysisResult& analysis) {
+    VerificationResult res;
+    const auto& h = coeff.fir;
+    const size_t taps = h.size();
+
+    bool finite = std::isfinite(coeff.gain) && std::isfinite(spec.sampleRate) &&
+                  spec.sampleRate > 0.0 && !analysis.frequencyResponse.empty() &&
+                  !analysis.impulseResponse.empty() && !analysis.stepResponse.empty();
+    for (double v : h) finite = finite && std::isfinite(v);
+    for (const auto& pt : analysis.frequencyResponse)
+        finite = finite && std::isfinite(pt.frequency) && std::isfinite(pt.magnitude) &&
+                 std::isfinite(pt.phase) && std::isfinite(pt.groupDelay);
+    if (!finite) {
+        res.passed = res.stage1Passed = res.stage2Passed = false;
+        res.poleUnitCircleOk = false;
+        res.referenceModelVerified = false;
+        res.stage1Details += "[FAIL] Numerical Breakdown: FIR taps or response contain NaN / Infinity.\n";
+        res.summary = "Verification Failed: Numerical Instability Detected";
+        return res;
+    }
+
+    // ── STAGE 1: Structural audit ─────────────────────────────────────────
+    res.maxPoleRadius = 0.0;
+    res.stabilityMargin = 1.0;
+    res.poleUnitCircleOk = true;
+    res.stage1Details += "[PASS] FIR is unconditionally stable: all " + std::to_string(coeff.poles.size()) +
+                         " poles at z = 0.\n";
+
+    double maxAsym = 0.0;
+    for (size_t n = 0; n < taps; ++n)
+        maxAsym = std::max(maxAsym, std::abs(h[n] - h[taps - 1 - n]));
+    res.conjugateSymmetryOk = maxAsym <= 1e-12;
+    if (res.conjugateSymmetryOk) {
+        res.stage1Details += "[PASS] Linear Phase: taps are symmetric (max asymmetry " +
+                             std::to_string(maxAsym) + ").\n";
+    } else {
+        res.stage1Passed = false;
+        res.stage1Details += "[FAIL] Linear Phase: tap symmetry violated by " + std::to_string(maxAsym) + ".\n";
+    }
+
+    double tapSum = 0.0;
+    for (double v : h) tapSum += v;
+    res.dcGainError = std::abs(coeff.evaluate(0.0) - Complex{coeff.gain * tapSum, 0.0});
+    if (res.dcGainError > 1e-9) {
+        res.stage1Passed = false;
+        res.stage1Details += "[FAIL] DC gain disagrees with tap sum by " + std::to_string(res.dcGainError) + ".\n";
+    } else {
+        res.stage1Details += "[PASS] DC gain equals tap sum (error " + std::to_string(res.dcGainError) + ").\n";
+    }
+
+    // ── STAGE 2: Parseval energy, BIBO and reference model ────────────────
+    // Parseval: integral_0^{fs/2} |H(f)|^2 df = (fs / 2) * sum h[n]^2
+    double plottedEnergy = 0.0;
+    const auto& fr = analysis.frequencyResponse;
+    for (size_t i = 0; i + 1 < fr.size(); ++i) {
+        const double mag1 = std::pow(10.0, fr[i].magnitude / 20.0);
+        const double mag2 = std::pow(10.0, fr[i + 1].magnitude / 20.0);
+        plottedEnergy += 0.5 * (mag1 * mag1 + mag2 * mag2) * (fr[i + 1].frequency - fr[i].frequency);
+    }
+    double tapEnergy = 0.0;
+    for (double v : h) tapEnergy += v * v;
+    tapEnergy *= coeff.gain * coeff.gain * spec.sampleRate * 0.5;
+    res.parsevalEnergyError = tapEnergy > 1e-20 ? std::abs(plottedEnergy - tapEnergy) / tapEnergy : 0.0;
+    res.parsevalEnergyOk = res.parsevalEnergyError <= 0.02;
+    if (res.parsevalEnergyOk) {
+        res.stage2Details += "[PASS] Parseval Energy Error: " + std::to_string(res.parsevalEnergyError) + ".\n";
+    } else {
+        res.stage2Passed = false;
+        res.stage2Details += "[FAIL] Parseval Energy Error: " + std::to_string(res.parsevalEnergyError * 100.0) + "%\n";
+    }
+
+    double maxStepPeak = 0.0;
+    for (double s : analysis.stepResponse) maxStepPeak = std::max(maxStepPeak, std::abs(s));
+    res.maxTransientPeak = maxStepPeak;
+    res.biboStabilityOk = true;
+    res.stage2Details += "[PASS] BIBO Transient Peak: " + std::to_string(maxStepPeak) + " (Bounded).\n";
+
+    // Reference: long-double DFT of the taps and the ideal N/2 linear-phase delay
+    const double expectedDelay = static_cast<double>(taps - 1) / 2.0;
+    int matchedPts = 0;
+    double maxMagErrDb = 0.0, maxPhaseErrDeg = 0.0, maxGdErr = 0.0;
+    for (const auto& pt : fr) {
+        const long double omega = 2.0L * static_cast<long double>(PI) * pt.frequency / spec.sampleRate;
+        std::complex<long double> ref{0.0L, 0.0L};
+        for (size_t n = 0; n < taps; ++n) {
+            const long double phase = omega * static_cast<long double>(n);
+            ref += static_cast<long double>(h[n]) * std::complex<long double>{std::cos(phase), -std::sin(phase)};
+        }
+        ref *= static_cast<long double>(coeff.gain);
+        const double refAbs = static_cast<double>(std::abs(ref));
+        const double refDb = refAbs > 1e-15 ? std::clamp(20.0 * std::log10(refAbs), -300.0, 100.0) : -300.0;
+        double errDb = std::abs(pt.magnitude - refDb);
+        if (pt.magnitude < -80.0 && refDb < -80.0) errDb = 0.0;
+        maxMagErrDb = std::max(maxMagErrDb, errDb);
+        if (errDb <= 0.05) ++matchedPts;
+
+        const Complex Hs = coeff.evaluate(static_cast<double>(omega));
+        if (refAbs > 1e-6 && std::abs(Hs) > 1e-6) {
+            const double phaseErr = std::abs(std::remainder(
+                static_cast<double>(std::arg(ref)) - std::arg(Hs), 2.0 * PI)) * 180.0 / PI;
+            maxPhaseErrDeg = std::max(maxPhaseErrDeg, phaseErr);
+        }
+        if (res.conjugateSymmetryOk && refAbs > 1e-3)
+            maxGdErr = std::max(maxGdErr, std::abs(pt.groupDelay - expectedDelay) / std::max(1.0, expectedDelay));
+    }
+
+    double maxImpulseErr = 0.0;
+    for (size_t n = 0; n < analysis.impulseResponse.size(); ++n) {
+        const double expected = n < taps ? coeff.gain * h[n] : 0.0;
+        maxImpulseErr = std::max(maxImpulseErr, std::abs(analysis.impulseResponse[n] - expected));
+    }
+
+    const int totalPts = static_cast<int>(fr.size());
+    res.totalPoints = totalPts;
+    res.matchedPoints = matchedPts;
+    res.maxPointMagnitudeErrorDb = maxMagErrDb;
+    res.maxPointPhaseErrorDeg = maxPhaseErrDeg;
+    res.maxGroupDelayRelativeError = maxGdErr;
+    res.maxImpulseError = maxImpulseErr;
+    res.referenceModelVerified = totalPts > 0 && matchedPts == totalPts && maxMagErrDb <= 1e-3 &&
+                                 maxPhaseErrDeg <= 1e-3 && maxGdErr <= 1e-6 && maxImpulseErr <= 1e-12;
+    if (res.referenceModelVerified) {
+        res.stage2Details += "[PASS] Reference Model Compliance: 100% matched (" + std::to_string(matchedPts) + "/" +
+                             std::to_string(totalPts) + " points; group delay = " +
+                             std::to_string(expectedDelay) + " samples).\n";
+    } else {
+        res.stage2Passed = false;
+        res.stage2Details += "[FAIL] Reference Model Discrepancy: Max error = " + std::to_string(maxMagErrDb) +
+                             " dB (" + std::to_string(matchedPts) + "/" + std::to_string(totalPts) +
+                             " points matched; group-delay relative error " + std::to_string(maxGdErr) + ").\n";
+    }
+
+    // Windowed-sinc band edges sit at half amplitude (-6.02 dB)
+    const double expectedEdgeDb = -6.0205999133;
+    const double edges[] = {spec.cutoffFreq, spec.cutoffFreq2};
+    const int edgeCount = (spec.type == FilterType::BandPass || spec.type == FilterType::BandStop) ? 2 : 1;
+    double maxSpecErrDb = 0.0;
+    for (int i = 0; i < edgeCount; ++i) {
+        const double mag = std::abs(coeff.evaluate(2.0 * PI * edges[i] / spec.sampleRate));
+        const double measured = mag > 1e-15 ? 20.0 * std::log10(mag) : -300.0;
+        maxSpecErrDb = std::max(maxSpecErrDb, std::abs(measured - expectedEdgeDb));
+    }
+    res.maxSpecificationErrorDb = maxSpecErrDb;
+    res.specificationOk = maxSpecErrDb <= 1.0;
+    if (res.specificationOk) {
+        res.stage2Details += "[PASS] FIR band edges are within 1 dB of the -6.02 dB windowed-sinc target.\n";
+    } else {
+        res.stage2Passed = false;
+        res.stage2Details += "[FAIL] FIR band edges miss the -6.02 dB target by " + std::to_string(maxSpecErrDb) +
+                             " dB (increase the order to sharpen the transition band).\n";
+    }
+
+    res.passed = res.stage1Passed && res.stage2Passed && res.specificationOk;
+    res.summary = res.passed ? "Filter Design Verified Successfully without Errors"
+                             : "Verification Flagged Mathematical Anomalies";
+    return res;
+}
+
 VerificationResult FilterAnalysis::verify(const FilterSpec& spec,
                                           const FilterCoefficients& coeff,
                                           const AnalysisResult& analysis) {
+    if (coeff.isFir())
+        return verifyFir(spec, coeff, analysis);
+
     VerificationResult res;
     res.stage1Passed = true;
     res.stage2Passed = true;

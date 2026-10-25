@@ -9,6 +9,7 @@ Overtune is a desktop application for designing digital filters, analyzing signa
 ## Features
 
 - Design low-pass, high-pass, band-pass, and band-stop IIR filters using Butterworth, Chebyshev I/II, elliptic, and Bessel responses.
+- Design linear-phase FIR filters (windowed sinc, order up to 256) with rectangular, Hann, Hamming, Blackman, or Kaiser windows.
 - Inspect magnitude, phase, group delay, pole-zero, impulse, and step responses.
 - Import WAV and CSV data, generate test signals, and compare filtered audio.
 - Export filter implementations as C, C++, Python, or JSON.

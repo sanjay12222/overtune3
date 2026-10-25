@@ -15,6 +15,7 @@
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QVariantMap>
+#include <algorithm>
 #include <stdexcept>
 #include <QUrl>
 #include <QDateTime>
@@ -58,6 +59,8 @@ static QJsonArray defaultPresets() {
                         48000, "~/presets/subsonic/rumble-cut"));
   arr.append(makePreset("chebyshev2_stopband_10k", 0, 2, 4, 10000, 0, 1.0, 60.0,
                         48000, "~/presets/scientific/monotonic-passband"));
+  arr.append(makePreset("fir_linear_phase_lpf_4k", 0, 5, 64, 4000, 0, 1.0, 60.0,
+                        48000, "~/presets/fir/linear-phase-lowpass"));
   return arr;
 }
 
@@ -85,16 +88,27 @@ void FilterEngine::setFilterType(int v) {
     design(); // Discrete type change runs immediately
   }
 }
+// Highest order the DSP library accepts for a given response family
+static int maxOrderFor(dsp::FilterResponse r) {
+  switch (r) {
+    case dsp::FilterResponse::Bessel: return 10;
+    case dsp::FilterResponse::FIR:    return 256;
+    default:                          return 16;
+  }
+}
+
 void FilterEngine::setFilterResponse(int v) {
   auto r = static_cast<dsp::FilterResponse>(v);
   if (m_spec.response != r) {
     qDebug() << "[FilterEngine] setFilterResponse:" << v;
     m_spec.response = r;
+    m_spec.order = std::min(m_spec.order, maxOrderFor(r));
     emit specChanged();
     design(); // Discrete response change runs immediately
   }
 }
 void FilterEngine::setOrder(int v) {
+  v = std::clamp(v, 1, maxOrderFor(m_spec.response));
   if (m_spec.order != v) {
     qDebug() << "[FilterEngine] setOrder:" << v;
     m_spec.order = v;
@@ -136,6 +150,15 @@ void FilterEngine::setStopbandDb(double v) {
     m_spec.stopbandDb = v;
     emit specChanged();
     scheduleDesign();
+  }
+}
+
+void FilterEngine::setFirWindow(int v) {
+  auto w = static_cast<dsp::FirWindow>(v);
+  if (m_spec.firWindow != w) {
+    m_spec.firWindow = w;
+    emit specChanged();
+    design(); // Discrete window change runs immediately
   }
 }
 
@@ -365,7 +388,12 @@ QString FilterEngine::filterTypeName() const {
   return QString::fromStdString(m_spec.typeName());
 }
 QString FilterEngine::filterResponseName() const {
+  if (m_spec.isFir())
+    return QString("FIR (%1)").arg(QString::fromStdString(m_spec.windowName()));
   return QString::fromStdString(m_spec.responseName());
+}
+QString FilterEngine::firWindowName() const {
+  return QString::fromStdString(m_spec.windowName());
 }
 
 QVariantList FilterEngine::loadPresets() {
@@ -429,6 +457,7 @@ bool FilterEngine::savePreset(const QString &name) {
   p["rippleDb"] = m_spec.rippleDb;
   p["stopbandDb"] = m_spec.stopbandDb;
   p["sampleRate"] = m_spec.sampleRate;
+  p["firWindow"] = static_cast<int>(m_spec.firWindow);
   p["desc"] = QString("User Preset · %1 %2 · Fc %3 Hz")
                   .arg(filterTypeName())
                   .arg(filterResponseName())
@@ -504,6 +533,8 @@ bool FilterEngine::applyPreset(const QString &name) {
       m_spec.rippleDb = o["rippleDb"].toDouble();
       m_spec.stopbandDb = o["stopbandDb"].toDouble();
       m_spec.sampleRate = o["sampleRate"].toDouble();
+      m_spec.firWindow = static_cast<dsp::FirWindow>(
+          o["firWindow"].toInt(static_cast<int>(dsp::FirWindow::Hamming)));
       emit specChanged();
       design();
       return true;

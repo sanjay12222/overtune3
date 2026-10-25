@@ -3,6 +3,7 @@
 #include "Chebyshev.h"
 #include "Elliptic.h"
 #include "Bessel.h"
+#include "Fir.h"
 #include "dsp/FilterSpec.h"
 #include <cmath>
 #include <stdexcept>
@@ -11,8 +12,12 @@
 namespace dsp {
 
 FilterCoefficients designFilter(const FilterSpec& spec) {
-    if (spec.order < 1 || spec.order > 16)
+    if (spec.response == FilterResponse::FIR) {
+        if (spec.order < 1 || spec.order > 256)
+            throw std::invalid_argument("FIR filter order must be between 1 and 256");
+    } else if (spec.order < 1 || spec.order > 16) {
         throw std::invalid_argument("Filter order must be between 1 and 16");
+    }
     if (spec.response == FilterResponse::Bessel && spec.order > 10)
         throw std::invalid_argument("Bessel filter order must be between 1 and 10");
     if (!std::isfinite(spec.sampleRate) || spec.sampleRate <= 0.0 ||
@@ -38,6 +43,7 @@ FilterCoefficients designFilter(const FilterSpec& spec) {
         case FilterResponse::ChebyshevII:  return internal::designChebyshevII(spec);
         case FilterResponse::Elliptic:     return internal::designElliptic(spec);
         case FilterResponse::Bessel:       return internal::designBessel(spec);
+        case FilterResponse::FIR:          return internal::designFir(spec);
     }
     return {};
 }

@@ -20,6 +20,8 @@ public:
 private:
     struct BiquadState { double x1{}, x2{}, y1{}, y2{}; };
     std::vector<BiquadState> m_state;
+    std::vector<double>      m_firHistory;   // circular delay line for FIR taps
+    size_t                   m_firPos{0};
     FilterCoefficients       m_coeff;
 };
 

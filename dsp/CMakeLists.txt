@@ -10,6 +10,7 @@ add_library(dsp STATIC
     src/Chebyshev.cpp
     src/Elliptic.cpp
     src/Bessel.cpp
+    src/Fir.cpp
     src/FilterCoefficients.cpp
     src/FilterDesigner.cpp
     src/FilterAnalysis.cpp

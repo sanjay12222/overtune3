@@ -279,7 +279,9 @@ Item {
                         }
 
                         Text {
-                            text: "Order " + filterEngine.order + " (" + Math.ceil(filterEngine.order / 2) + " Biquads)"
+                            text: filterEngine.isFir
+                                  ? "Order " + (filterEngine.tapCount - 1) + " (" + filterEngine.tapCount + " Taps)"
+                                  : "Order " + filterEngine.order + " (" + filterEngine.sectionCount + (filterEngine.sectionCount === 1 ? " Biquad)" : " Biquads)")
                             font.family: "Stack Sans Headline"
                             font.pixelSize: 11
                             color: theme.secondaryText

@@ -411,6 +411,17 @@ Rectangle {
                         checked: filterEngine.filterResponse === 4
                         onTriggered: { filterEngine.filterResponse = 4; filterEngine.design(); rootWindow.showNotification("Selected: Bessel (Linear Phase)", false) }
                     }
+                    StyledMenuItem {
+                        text: "FIR / Windowed Sinc (Exact Linear Phase)"
+                        checkable: true
+                        checked: filterEngine.filterResponse === 5
+                        onTriggered: {
+                            filterEngine.filterResponse = 5
+                            if (filterEngine.order < 16) filterEngine.order = 64
+                            filterEngine.design()
+                            rootWindow.showNotification("Selected: FIR (Windowed Sinc)", false)
+                        }
+                    }
                 }
 
                 StyledMenu {
