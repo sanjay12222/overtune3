@@ -253,7 +253,7 @@ Item {
     }
 
     function saveToFile(filePath) {
-        let clean = filePath.toString().replace(/^file:\/\//, "")
+        let clean = filterEngine.toLocalPath(filePath.toString())
         if (!clean.endsWith(".png") && !clean.endsWith(".jpg") && !clean.endsWith(".jpeg")) {
             clean += ".png"
         }

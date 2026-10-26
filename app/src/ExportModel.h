@@ -13,7 +13,10 @@ public:
     QString code()   const { return m_code; }
     int     format() const { return m_format; }
 
-    void setFormat(int f) {
+    static constexpr int formatCount = 8;   // dsp::ExportFormat::C .. Csv
+
+    Q_INVOKABLE void setFormat(int f) {
+        if (f < 0 || f >= formatCount) return;
         if (m_format != f) { m_format = f; emit formatChanged(); }
     }
 

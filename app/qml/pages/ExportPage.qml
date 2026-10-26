@@ -16,10 +16,14 @@ Item {
     readonly property int pageMargin: width < 700 ? 10 : 16
 
     function openSaveDialog() {
-        if (exportModel.code.length === 0) {
-            exportModel.generate(filterEngine)
-        }
+        exportModel.generate(filterEngine)   // always save the current design
         saveDialog.open()
+    }
+
+    // Keep the generated code in sync with the design (the page stays loaded)
+    Connections {
+        target: filterEngine
+        function onResultsChanged() { exportModel.generate(filterEngine) }
     }
 
     Item {
@@ -35,7 +39,7 @@ Item {
                 right: parent.right
             }
             title: "Production Code Exporter"
-            badgeText: filterEngine.filterResponseName() + " (" + filterEngine.order + "th order)"
+            badgeText: filterEngine.responseName + " (" + filterEngine.orderLabel + ")"
         }
 
 
@@ -74,19 +78,44 @@ Item {
                         color: theme.borderColor
                     }
 
-                    // Left: File Tabs
-                    Row {
+                    // Left: File Tabs (scrolls horizontally when they do not fit)
+                    Flickable {
+                        id: tabScroller
                         anchors.left: parent.left
+                        anchors.right: actionButtons.left
+                        anchors.rightMargin: 8
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
+                        contentWidth: tabStrip.width
+                        contentHeight: height
+                        flickableDirection: Flickable.HorizontalFlick
+                        boundsBehavior: Flickable.StopAtBounds
+                        clip: true
+
+                        WheelHandler {
+                            onWheel: function(event) {
+                                const delta = event.angleDelta.y !== 0 ? event.angleDelta.y : event.angleDelta.x
+                                tabScroller.contentX = Math.max(0, Math.min(tabScroller.contentWidth - tabScroller.width,
+                                                                            tabScroller.contentX - delta))
+                            }
+                        }
+
+                    Row {
+                        id: tabStrip
+                        height: parent.height
                         spacing: 0
 
                         Repeater {
+                            // Order matches dsp::ExportFormat
                             model: [
                                 { name: "filter.c",    lang: "Embedded C",   icon: "file-code" },
                                 { name: "Filter.hpp",  lang: "Modern C++20", icon: "file-code" },
                                 { name: "filter.py",   lang: "Python SciPy", icon: "file-code" },
-                                { name: "filter.json", lang: "JSON Schema",  icon: "file-code" }
+                                { name: "filter.json", lang: "JSON Schema",  icon: "file-code" },
+                                { name: "filter.m",    lang: "MATLAB / Octave", icon: "file-code" },
+                                { name: "filter.rs",   lang: "Rust",         icon: "file-code" },
+                                { name: "filter.js",   lang: "WebAudio JS",  icon: "file-code" },
+                                { name: "coefficients.csv", lang: "CSV",     icon: "file-code" }
                             ]
                             delegate: Rectangle {
                                 required property int index
@@ -151,9 +180,11 @@ Item {
                             }
                         }
                     }
+                    }
 
                     // Right: Action buttons (Copy & Save As)
                     Row {
+                        id: actionButtons
                         anchors.right: parent.right
                         anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
@@ -265,7 +296,7 @@ Item {
                         spacing: 12
 
                         Text {
-                            text: filterEngine.filterResponseName() + " " + filterEngine.filterTypeName()
+                            text: filterEngine.responseName + " " + filterEngine.typeName
                             font.family: "Stack Sans Headline"
                             font.pixelSize: 11
                             font.weight: Font.Medium
@@ -385,11 +416,18 @@ Item {
                 "C source files (*.c)",
                 "C++ header files (*.hpp *.h)",
                 "Python script (*.py)",
-                "JSON configuration (*.json)"
+                "JSON configuration (*.json)",
+                "MATLAB / Octave script (*.m)",
+                "Rust source (*.rs)",
+                "JavaScript module (*.js *.mjs)",
+                "CSV coefficients (*.csv)"
             ]
             return [ext[exportModel.format], "All files (*)"]
         }
-        onAccepted: exportModel.saveToFile(selectedFile.toString().replace("file://", ""))
+        onAccepted: {
+            if (!exportModel.saveToFile(selectedFile.toString()))
+                Window.window.showNotification("Could not write " + filterEngine.toLocalPath(selectedFile.toString()), true)
+        }
     }
 
     Component.onCompleted: exportModel.generate(filterEngine)

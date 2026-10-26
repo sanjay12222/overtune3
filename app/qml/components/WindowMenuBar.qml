@@ -13,6 +13,18 @@ Rectangle {
 
     property var rootWindow: null
 
+    // Copy one export format to the clipboard without changing the Export page's tab
+    // Formats: 0 C, 1 C++, 2 Python, 3 JSON, 4 MATLAB, 5 Rust, 6 WebAudio JS, 7 CSV
+    function copyExport(format, message) {
+        const previous = exportModel.format
+        exportModel.setFormat(format)
+        exportModel.generate(filterEngine)
+        exportModel.copyToClipboard()
+        exportModel.setFormat(previous)
+        exportModel.generate(filterEngine)
+        rootWindow.showNotification(message, false)
+    }
+
     // Component for clean, styled MenuItems with shortcuts and checkmarks
     component StyledMenuItem: MenuItem {
         id: mi
@@ -264,20 +276,14 @@ Rectangle {
                 StyledMenuItem {
                     text: "Copy Coefficients CSV to Clipboard"
                     onTriggered: {
-                        exportModel.setFormat(7) // CSV format
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("Filter coefficients CSV copied to clipboard", false)
+                        root.copyExport(7, "Filter coefficients CSV copied to clipboard")
                     }
                 }
 
                 StyledMenuItem {
                     text: "Copy Coefficients JSON to Clipboard"
                     onTriggered: {
-                        exportModel.setFormat(6) // JSON format
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("Filter coefficients JSON copied to clipboard", false)
+                        root.copyExport(3, "Filter coefficients JSON copied to clipboard")
                     }
                 }
 
@@ -295,52 +301,37 @@ Rectangle {
                 title: "Edit"
 
                 StyledMenuItem {
-                    text: "Copy C++ Biquad Class"
+                    text: "Copy C++ Filter Class"
                     onTriggered: {
-                        exportModel.setFormat(0)
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("C++ Biquad code copied to clipboard", false)
+                        root.copyExport(1, "C++ filter code copied to clipboard")
                     }
                 }
 
                 StyledMenuItem {
                     text: "Copy Python (SciPy) Script"
                     onTriggered: {
-                        exportModel.setFormat(2)
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("Python (SciPy) filter script copied", false)
+                        root.copyExport(2, "Python (SciPy) filter script copied")
                     }
                 }
 
                 StyledMenuItem {
                     text: "Copy MATLAB Filter Script"
                     onTriggered: {
-                        exportModel.setFormat(3)
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("MATLAB filter design script copied", false)
+                        root.copyExport(4, "MATLAB filter design script copied")
                     }
                 }
 
                 StyledMenuItem {
                     text: "Copy Rust Filter Implementation"
                     onTriggered: {
-                        exportModel.setFormat(4)
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("Rust DSP filter implementation copied", false)
+                        root.copyExport(5, "Rust DSP filter implementation copied")
                     }
                 }
 
                 StyledMenuItem {
-                    text: "Copy WebAudio (JS) Biquad Node"
+                    text: "Copy WebAudio (JS) Filter"
                     onTriggered: {
-                        exportModel.setFormat(5)
-                        exportModel.generate(filterEngine)
-                        exportModel.copyToClipboard()
-                        rootWindow.showNotification("WebAudio JavaScript code copied", false)
+                        root.copyExport(6, "WebAudio JavaScript code copied")
                     }
                 }
 
@@ -1024,7 +1015,7 @@ Rectangle {
     // Center cluster: Subtle status bar showing active filter & sample rate
     Text {
         anchors.centerIn: parent
-        text: "Overtune 3  —  " + filterEngine.filterResponseName() + " " + filterEngine.order + "th-Order " + filterEngine.filterTypeName() + " (" + (filterEngine.sampleRate / 1000).toFixed(1) + " kHz)"
+        text: "Overtune 3  —  " + filterEngine.responseName + " " + filterEngine.orderLabel + " " + filterEngine.typeName + " (" + (filterEngine.sampleRate / 1000).toFixed(1) + " kHz)"
         font.family: "Stack Sans Headline"
         font.pixelSize: 11
         color: theme.secondaryText

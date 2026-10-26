@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQuickStyle>
 #include <QIcon>
 #include <QFont>
 #include <QFontDatabase>
@@ -29,6 +30,10 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setOrganizationName("Overtune");
     QGuiApplication::setApplicationVersion(OVERTUNE_VERSION);
 
+    // The app restyles every control; native styles (Windows, FluentWinUI3)
+    // do not support customised background/contentItem, so use Basic
+    QQuickStyle::setStyle(QStringLiteral("Basic"));
+
     QGuiApplication app(argc, argv);
     app.setWindowIcon(QIcon(QStringLiteral(":/FilterDesigner/icons/logo.png")));
 
@@ -53,6 +58,15 @@ int main(int argc, char* argv[]) {
     ExportModel            exportModel;
     ThemeManager           theme;
     UpdateInstallerEngine  updateInstaller;
+    exportModel.setFormat(theme.defaultExportLang());
+
+    // Apply persisted settings that drive the engine. Plot resolution 1024 (the
+    // default) keeps the original 3072-point analysis grid.
+    engine.setSampleRate(theme.defaultSampleRate());
+    engine.setAnalysisPoints(theme.plotResolution() * 3);
+    QObject::connect(&theme, &ThemeManager::plotSettingsChanged, &engine, [&engine, &theme]() {
+        engine.setAnalysisPoints(theme.plotResolution() * 3);
+    });
 
     // Check CLI arguments or executable name for installer or update launch modes
     bool launchInstaller = false;

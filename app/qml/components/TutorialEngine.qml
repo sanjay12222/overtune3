@@ -294,7 +294,7 @@ Item {
             minStopbandAtten: 24.0,
             maxOrder: 4,
             hints: [
-                "Butterworth order 4 yields the exact -24 dB/octave Linkwitz-Riley roll-off slope."
+                "A 4th-order Butterworth rolls off at -24 dB/octave (a Linkwitz-Riley LR4 crossover is two cascaded 2nd-order Butterworths, not one 4th-order)."
             ]
         }
     ]

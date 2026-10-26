@@ -29,6 +29,8 @@ class ThemeManager : public QObject {
   Q_PROPERTY(QString sidebarBg READ sidebarBg NOTIFY themeModeChanged)
   Q_PROPERTY(QString activityBarBg READ activityBarBg NOTIFY themeModeChanged)
   Q_PROPERTY(QString danger READ danger NOTIFY themeModeChanged)
+  Q_PROPERTY(QString headlineFont READ headlineFont CONSTANT)
+  Q_PROPERTY(QString bodyFont READ bodyFont CONSTANT)
 
 public:
   enum ThemeMode { System = 0, Light = 1, Dark = 2 };
@@ -46,6 +48,8 @@ public:
   bool animationsEnabled() const { return m_animationsEnabled; }
   int defaultSampleRate() const { return m_defaultSampleRate; }
   int defaultExportLang() const { return m_defaultExportLang; }
+  QString headlineFont() const { return QStringLiteral("Stack Sans Headline"); }
+  QString bodyFont() const { return QStringLiteral("Stack Sans Headline"); }
 
   void setThemeMode(int mode);
   void setAccentColorIndex(int index);

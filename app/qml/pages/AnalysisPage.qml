@@ -45,7 +45,7 @@ Item {
         PageHeader {
             Layout.fillWidth: true
             title: "Frequency Analysis Suite"
-            badgeText: filterEngine.filterResponseName() + " " + filterEngine.filterTypeName() + " (" + filterEngine.order + "th order)"
+            badgeText: filterEngine.responseName + " " + filterEngine.typeName + " (" + filterEngine.orderLabel + ")"
 
 
             // Auto-Scale All action button

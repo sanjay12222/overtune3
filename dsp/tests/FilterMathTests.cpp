@@ -1,9 +1,17 @@
 #include "dsp/FilterAnalysis.h"
 #include "dsp/FilterDesigner.h"
 #include "dsp/SignalProcessor.h"
+#include "dsp/CodeExporter.h"
+#include "dsp/CsvReader.h"
+#include "dsp/WavReader.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <fstream>
+#include <string>
+#include <vector>
 #include <iostream>
 #include <numbers>
 #include <stdexcept>
@@ -92,9 +100,13 @@ void runDesignMatrix() {
 }
 
 void runFirMatrix() {
-    for (int window = 0; window < 5; ++window) {
+    constexpr int windowCount = static_cast<int>(dsp::FirWindow::DolphChebyshev) + 1;
+    for (int window = 0; window < windowCount; ++window) {
+        // Full order sweep for the original windows, a shorter one for the rest
+        const std::vector<int> orders = window < 5 ? std::vector<int>{63, 64, 128, 256}
+                                                   : std::vector<int>{63, 128};
         for (int type = 0; type < 4; ++type) {
-            for (int order : {63, 64, 128, 256}) {
+            for (int order : orders) {
                 dsp::FilterSpec spec;
                 spec.response = dsp::FilterResponse::FIR;
                 spec.firWindow = static_cast<dsp::FirWindow>(window);
@@ -165,6 +177,90 @@ void runFirMatrix() {
     check(rejected, "FIR order above 256 is rejected");
 }
 
+// Write a minimal RIFF/WAVE file; fmtExtra and padChunk exercise parser edge cases
+void writeWav(const std::string& path, uint16_t format, uint16_t channels, uint16_t bits,
+              const std::vector<uint8_t>& samples, bool extensible, bool oddChunkFirst, bool withFmt = true) {
+    std::vector<uint8_t> body;
+    auto u16 = [&](uint16_t v) { body.push_back(v & 0xFF); body.push_back(v >> 8); };
+    auto u32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) body.push_back((v >> (8 * i)) & 0xFF); };
+    auto tag = [&](const char* t) { body.insert(body.end(), t, t + 4); };
+    tag("WAVE");
+    if (oddChunkFirst) { tag("LIST"); u32(3); body.push_back('a'); body.push_back('b'); body.push_back('c'); body.push_back(0); }
+    if (withFmt) {
+        tag("fmt ");
+        u32(extensible ? 40 : 16);
+        u16(extensible ? 0xFFFE : format);
+        u16(channels); u32(48000); u32(48000u * channels * bits / 8); u16(static_cast<uint16_t>(channels * bits / 8)); u16(bits);
+        if (extensible) {
+            u16(22); u16(bits); u32(0);
+            u16(format);  // SubFormat GUID starts with the real format tag
+            for (int i = 0; i < 14; ++i) body.push_back(0);
+        }
+    }
+    tag("data"); u32(static_cast<uint32_t>(samples.size()));
+    body.insert(body.end(), samples.begin(), samples.end());
+    std::ofstream f(path, std::ios::binary);
+    f.write("RIFF", 4);
+    const uint32_t size = static_cast<uint32_t>(body.size());
+    for (int i = 0; i < 4; ++i) f.put(static_cast<char>((size >> (8 * i)) & 0xFF));
+    f.write(reinterpret_cast<const char*>(body.data()), static_cast<std::streamsize>(body.size()));
+}
+
+void runFileReaderChecks() {
+    const std::string wav = "overtune_test.wav";
+    // 16-bit stereo after an odd-sized LIST chunk: needs RIFF pad-byte handling
+    writeWav(wav, 1, 2, 16, {0x00, 0x40, 0x00, 0xC0, 0x00, 0x20, 0x00, 0x20}, false, true);
+    auto mono = dsp::WavReader::readMono(wav);
+    check(mono.size() == 2 && std::abs(mono[0]) < 1e-12 && std::abs(mono[1] - 0.25) < 1e-12,
+          "WAV parser skips padded odd chunks and mixes stereo to mono");
+
+    // 24-bit WAVE_FORMAT_EXTENSIBLE
+    writeWav(wav, 1, 1, 24, {0x00, 0x00, 0x40, 0x00, 0x00, 0xC0}, true, false);
+    mono = dsp::WavReader::readMono(wav);
+    check(mono.size() == 2 && std::abs(mono[0] - 0.5) < 1e-9 && std::abs(mono[1] + 0.5) < 1e-9,
+          "WAV parser reads WAVE_FORMAT_EXTENSIBLE 24-bit PCM");
+
+    // Missing fmt chunk and zero channels must fail cleanly instead of hanging
+    bool rejected = false;
+    writeWav(wav, 1, 1, 16, {0, 0}, false, false, false);
+    try { (void)dsp::WavReader::readMono(wav); } catch (const std::runtime_error&) { rejected = true; }
+    check(rejected, "WAV without fmt chunk is rejected");
+    rejected = false;
+    writeWav(wav, 1, 0, 16, {0, 0}, false, false);
+    try { (void)dsp::WavReader::readMono(wav); } catch (const std::runtime_error&) { rejected = true; }
+    check(rejected, "WAV with zero channels is rejected");
+    std::remove(wav.c_str());
+
+    const std::string csv = "overtune_test.csv";
+    { std::ofstream f(csv); f << "0.5\n-0.25\r\n1e-3\n"; }
+    auto col = dsp::CsvReader::readColumn(csv, 0);
+    check(col.size() == 3 && col[0] == 0.5, "headerless CSV keeps its first sample");
+    { std::ofstream f(csv); f << "time;value\n0;0.5\n1;0.75\n"; }
+    col = dsp::CsvReader::readColumn(csv, 1);
+    check(col.size() == 2 && col[1] == 0.75, "CSV header row is skipped and ';' delimiter detected");
+    std::remove(csv.c_str());
+}
+
+void runExporterChecks() {
+    for (auto response : {dsp::FilterResponse::Butterworth, dsp::FilterResponse::FIR}) {
+        dsp::FilterSpec spec;
+        spec.response = response;
+        spec.order = response == dsp::FilterResponse::FIR ? 32 : 4;
+        const auto coeff = dsp::designFilter(spec);
+        for (int format = 0; format <= static_cast<int>(dsp::ExportFormat::Csv); ++format) {
+            const auto code = dsp::CodeExporter::generate(coeff, spec, static_cast<dsp::ExportFormat>(format));
+            check(code.size() > 40, "every export format produces output");
+            check(code.find("2000 Hz") == std::string::npos,
+                  "low-pass export does not print the unused second cutoff");
+        }
+        const auto rust = dsp::CodeExporter::generate(coeff, spec, dsp::ExportFormat::Rust);
+        check(rust.find(", 1,") == std::string::npos && rust.find("[1,") == std::string::npos,
+              "Rust export writes float literals");
+        const auto json = dsp::CodeExporter::generate(coeff, spec, dsp::ExportFormat::Json);
+        check(json.find("\"isStable\": true") != std::string::npos, "JSON export reports stability");
+    }
+}
+
 void runInvalidSpecChecks() {
     dsp::FilterSpec spec;
     spec.cutoffFreq = 24000.0;
@@ -188,6 +284,8 @@ void runInvalidSpecChecks() {
 int main() {
     runDesignMatrix();
     runFirMatrix();
+    runFileReaderChecks();
+    runExporterChecks();
     runInvalidSpecChecks();
     if (failures != 0) {
         std::cerr << failures << " DSP math checks failed\n";

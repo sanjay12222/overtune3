@@ -29,7 +29,7 @@ Item {
     property int  magScaleMode: 0     // 0=dB scale, 1=Linear |H|
     property int  phaseWrapMode: 0    // 0=Unwrapped, 1=Wrapped [-180°, 180°]
     property bool showDspGuides: false // Default: OFF (clean view)
-    property bool showCrosshair: false // Opt-in Data Cursor / + Inspector (Default: OFF)
+    property bool showCrosshair: theme.showCrosshairByDefault // Data Cursor / + Inspector (Settings default)
     property real plotLineWidth: theme.plotLineWidth
     property bool isDetached: false
 
@@ -332,7 +332,7 @@ Item {
     }
 
     function saveToFile(filePath) {
-        let clean = filePath.toString().replace(/^file:\/\//, "")
+        let clean = filterEngine.toLocalPath(filePath.toString())
         if (!clean.endsWith(".png") && !clean.endsWith(".jpg") && !clean.endsWith(".jpeg")) {
             clean += ".png"
         }
@@ -638,7 +638,8 @@ Item {
 
             if (root.showDspGuides && mode === 0) {
                 if (root.magScaleMode === 0) {
-                    const y3 = valToY(-3.0)
+                    const edgeDb = filterEngine.edgeDb
+                    const y3 = valToY(edgeDb)
                     if (y3 >= mT && y3 <= mT + pH) {
                         ctx.strokeStyle = "#D97706"
                         ctx.lineWidth = 1
@@ -647,7 +648,7 @@ Item {
                         ctx.font = "bold 11px 'Stack Sans Headline', sans-serif"
                         ctx.textAlign = "right"
                         ctx.textBaseline = "bottom"
-                        ctx.fillText("-3.0 dB Cutoff", mL + pW - 8, y3 - 2)
+                        ctx.fillText(edgeDb.toFixed(1) + " dB Cutoff", mL + pW - 8, y3 - 2)
                     }
 
                     const rip = filterEngine.rippleDb
@@ -1584,7 +1585,7 @@ Item {
         MenuItem {
             text: "Copy Filter Specifications"
             onTriggered: {
-                const specText = filterEngine.filterResponseName() + " " + filterEngine.filterTypeName() +
+                const specText = filterEngine.responseName + " " + filterEngine.typeName +
                     "\nOrder: " + filterEngine.order + "\nSample Rate: " + filterEngine.sampleRate + " Hz" +
                     "\nCutoff: " + filterEngine.cutoffFreq + " Hz" + (root.isBandFilter ? (" to " + filterEngine.cutoffFreq2 + " Hz") : "") +
                     (filterEngine.filterResponse === 1 || filterEngine.filterResponse === 3 ? ("\nRipple: " + filterEngine.rippleDb + " dB") : "") +

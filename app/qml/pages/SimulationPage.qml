@@ -56,7 +56,7 @@ Item {
         PageHeader {
             Layout.fillWidth: true
             title: "Signal Simulation Studio"
-            badgeText: filterEngine.filterResponseName() + " " + filterEngine.filterTypeName() + " (" + filterEngine.order + "th order)"
+            badgeText: filterEngine.responseName + " " + filterEngine.typeName + " (" + filterEngine.orderLabel + ")"
 
 
             // Standalone Scope Window Opener
@@ -308,7 +308,7 @@ Item {
         options: FileDialog.DontUseNativeDialog
         nameFilters: ["WAV files (*.wav)", "All files (*)"]
         onAccepted: {
-            simulation.loadWav(selectedFile.toString().replace("file://", ""))
+            simulation.loadWav(selectedFile.toString())
             simulation.applyFilter(filterEngine)
         }
     }
@@ -318,7 +318,7 @@ Item {
         options: FileDialog.DontUseNativeDialog
         nameFilters: ["CSV files (*.csv *.txt)", "All files (*)"]
         onAccepted: {
-            simulation.loadCsv(selectedFile.toString().replace("file://", ""))
+            simulation.loadCsv(selectedFile.toString())
             simulation.applyFilter(filterEngine)
         }
     }

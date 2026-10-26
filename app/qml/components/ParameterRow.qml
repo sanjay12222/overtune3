@@ -11,8 +11,11 @@ Item {
     property real labelWidth: stacked ? width : Math.min(96, Math.max(64, width * 0.32))
     default property alias content: controlSlot.data
 
-    height: stacked ? (labelText.implicitHeight + 4 + 32) : 34
-    implicitHeight: height
+    // implicitHeight must not depend on height: rows that collapse with
+    // `height: visible ? implicitHeight : 0` would otherwise stay at 0 forever
+    // once hidden (e.g. Ripple/Stopband after switching the response)
+    implicitHeight: stacked ? (labelText.implicitHeight + 4 + 32) : 34
+    height: implicitHeight
     clip: true
 
     Text {

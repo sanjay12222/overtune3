@@ -423,13 +423,18 @@ Item {
                                 color: theme.primaryText
                                 elide: Text.ElideRight
                             }
-                            SegmentedButton {
+                            StyledCombo {
                                 id: exportControl
                                 anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
-                                width: Math.min(240, parent.width * (root.compact ? 0.55 : 0.7)); implicitHeight: 28
-                                model: ["C++20", "C99", "Python", "JSON"]
+                                width: Math.min(240, parent.width * (root.compact ? 0.55 : 0.7))
+                                // Order matches dsp::ExportFormat and the Export page tabs
+                                model: ["C99", "C++20", "Python", "JSON", "MATLAB / Octave", "Rust", "WebAudio JS", "CSV"]
                                 currentIndex: theme.defaultExportLang
-                                onActivated: function(idx) { theme.defaultExportLang = idx }
+                                onActivated: {
+                                    theme.defaultExportLang = currentIndex
+                                    exportModel.setFormat(currentIndex)
+                                    exportModel.generate(filterEngine)
+                                }
                             }
                             Rectangle {
                                 anchors { bottom: parent.bottom; left: parent.left; right: parent.right; leftMargin: 16 }

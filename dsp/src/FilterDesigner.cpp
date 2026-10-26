@@ -15,6 +15,12 @@ FilterCoefficients designFilter(const FilterSpec& spec) {
     if (spec.response == FilterResponse::FIR) {
         if (spec.order < 1 || spec.order > 256)
             throw std::invalid_argument("FIR filter order must be between 1 and 256");
+        if (spec.windowUsesParam() &&
+            (!std::isfinite(spec.firWindowParam) || spec.firWindowParam < 0.0 || spec.firWindowParam > 1.0 ||
+             (spec.firWindow == FirWindow::Gaussian && spec.firWindowParam <= 0.0)))
+            throw std::invalid_argument("FIR window parameter must be in (0, 1] for Gaussian and [0, 1] for Tukey");
+        if (spec.windowUsesAtten() && (!std::isfinite(spec.stopbandDb) || spec.stopbandDb <= 0.0))
+            throw std::invalid_argument("FIR window attenuation must be positive");
     } else if (spec.order < 1 || spec.order > 16) {
         throw std::invalid_argument("Filter order must be between 1 and 16");
     }

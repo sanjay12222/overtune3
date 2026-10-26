@@ -73,8 +73,11 @@ Window {
     function doReset() {
         if (typeof filterEngine !== "undefined" && typeof filterEngine.reset === "function") {
             filterEngine.reset()
+            filterEngine.sampleRate = theme.defaultSampleRate
+            filterEngine.design()
         }
-        showNotification("Filter reset to default (Butterworth 4th-Order LPF @ 1 kHz)", false)
+        showNotification("Filter reset to default (Butterworth 4th-order LPF @ 1 kHz, Fs "
+                         + (theme.defaultSampleRate / 1000) + " kHz)", false)
     }
 
     function doClear() {

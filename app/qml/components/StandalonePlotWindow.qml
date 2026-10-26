@@ -14,13 +14,13 @@ Window {
         case 0: {
             const m = extraProps && extraProps.displayMode !== undefined ? extraProps.displayMode : 0
             const mName = m === 0 ? "Magnitude (dB)" : (m === 1 ? "Phase (°)" : "Group Delay (samples)")
-            return "Overtune 3 (beta) — Frequency Response [" + mName + "] — " + filterEngine.filterResponseName() + " " + filterEngine.filterTypeName() + " (" + filterEngine.order + "th order)"
+            return "Overtune 3 (beta) — Frequency Response [" + mName + "] — " + filterEngine.responseName + " " + filterEngine.typeName + " (" + filterEngine.orderLabel + ")"
         }
         case 1:
-            return "Overtune 3 (beta) — Z-Plane Pole-Zero Constellation — " + filterEngine.filterResponseName() + " (" + filterEngine.order + "th order)"
+            return "Overtune 3 (beta) — Z-Plane Pole-Zero Constellation — " + filterEngine.responseName + " (" + filterEngine.orderLabel + ")"
         case 2: {
             const isStep = extraProps && extraProps.mode === 1
-            return "Overtune 3 (beta) — Time-Domain " + (isStep ? "Step" : "Impulse") + " Response — " + filterEngine.filterResponseName()
+            return "Overtune 3 (beta) — Time-Domain " + (isStep ? "Step" : "Impulse") + " Response — " + filterEngine.responseName
         }
         case 3:
             return "Overtune 3 (beta) — Real-Time Signal Simulation Studio & Oscilloscope"
@@ -148,7 +148,7 @@ Window {
                         }
 
                         Text {
-                            text: filterEngine.filterResponseName() + " " + filterEngine.filterTypeName() + "  ·  Order " + filterEngine.order + "  ·  Fs = " + Number(filterEngine.sampleRate).toLocaleString(Qt.locale(), "f", 0) + " Hz"
+                            text: filterEngine.responseName + " " + filterEngine.typeName + "  ·  Order " + filterEngine.order + "  ·  Fs = " + Number(filterEngine.sampleRate).toLocaleString(Qt.locale(), "f", 0) + " Hz"
                             font.family: "Stack Sans Headline"
                             font.pixelSize: 11
                             color: theme.secondaryText

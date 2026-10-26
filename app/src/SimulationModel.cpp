@@ -6,13 +6,19 @@
 #include <cmath>
 #include <numbers>
 #include <QVariantMap>
+#include <QUrl>
 
 SimulationModel::SimulationModel(QObject* parent) : QObject(parent) {
     // Initialize with a clean dual-tone test signal (1 kHz passband + 6 kHz stopband)
     generateMultiTone(1000.0, 6000.0, 48000.0, 0.04);
 }
 
-void SimulationModel::loadWav(const QString& path) {
+static QString localPath(const QString& urlOrPath) {
+    return urlOrPath.startsWith("file:", Qt::CaseInsensitive) ? QUrl(urlOrPath).toLocalFile() : urlOrPath;
+}
+
+void SimulationModel::loadWav(const QString& url) {
+    const QString path = localPath(url);
     try {
         auto samples = dsp::WavReader::readMono(path.toStdString());
         m_label = QStringLiteral("WAV: ") + path.section('/', -1);
@@ -22,7 +28,8 @@ void SimulationModel::loadWav(const QString& path) {
     }
 }
 
-void SimulationModel::loadCsv(const QString& path, int column) {
+void SimulationModel::loadCsv(const QString& url, int column) {
+    const QString path = localPath(url);
     try {
         auto samples = dsp::CsvReader::readColumn(path.toStdString(), column);
         m_label = QStringLiteral("CSV: ") + path.section('/', -1);
